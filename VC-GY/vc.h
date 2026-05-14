@@ -27,13 +27,18 @@ typedef struct {
 
 typedef struct
 {
-	int label;     // etiqueta do blob
-	int area;      // número de pixels
+	int label;       // Etiqueta do blob
+	int area;        // Número de pixels (Área)
+	float perimeter; // Perímetro
 
-	int xmin, ymin;
+	int xmin, ymin;  // Bounding Box
 	int xmax, ymax;
 
-	int xc, yc;    // centro de gravidade
+	int xc, yc;      // Centro de gravidade
+
+	float diameter;  // Diâmetro em mm
+	int caliber;     // Calibre (número)
+	char category[20]; // Categoria (Extra, I, II, III)
 
 } OVC;
 
@@ -52,5 +57,17 @@ int vc_hsv_segmentation(IVC* src, IVC* dst, int hmin, int hmax, int smin, int sm
 int vc_rgb_to_hsv(IVC* src, IVC* dst);
 int vc_binary_erode(IVC* src, IVC* dst, int kernel);
 int vc_binary_dilate(IVC* src, IVC* dst, int kernel);
+
+// Processamento Morfológico
+int vc_binary_open(IVC* src, IVC* dst, int size);
+int vc_binary_close(IVC* src, IVC* dst, int size);
+
+// Etiquetagem
 OVC* vc_binary_blob_labelling(IVC* src, IVC* dst, int* nblobs);
+
+// Extração de Características
+int vc_binary_blob_info(IVC* src, OVC* blobs, int nblobs);
+
+// Cálculo do Perímetro
+float vc_calculate_perimeter(IVC* src, int label);
 
