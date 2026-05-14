@@ -143,10 +143,15 @@ int main(void) {
 				int bbox_area = width_px * height_px;
 				float fill = (bbox_area > 0) ? ((float)blobs[i].area / (float)bbox_area) : 0.0f;
 
+				float circularity = (blobs[i].perimeter > 0.0f)
+					? (4.0f * 3.14159265358979323846f * (float)blobs[i].area) / (blobs[i].perimeter * blobs[i].perimeter)
+					: 0.0f;
+
 				if (blobs[i].area > 1500 &&
 					blobs[i].caliber > 0 &&
 					blobs[i].deformation < 0.30f &&
-					fill > 0.60f) {
+					fill > 0.60f &&
+					circularity > 0.60f) {
 					laranjas_na_frame++;
 
 					// RASTREAMENTO SIMPLES
