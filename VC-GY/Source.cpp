@@ -10,7 +10,6 @@ extern "C" {
 #include "vc.h"
 }
 
-
 void vc_timer(void) {
 	static bool running = false;
 	static std::chrono::steady_clock::time_point previousTime = std::chrono::steady_clock::now();
