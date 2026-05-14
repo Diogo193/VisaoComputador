@@ -10,6 +10,7 @@ extern "C" {
 #include "vc.h"
 }
 
+
 void vc_timer(void) {
 	static bool running = false;
 	static std::chrono::steady_clock::time_point previousTime = std::chrono::steady_clock::now();
@@ -114,7 +115,7 @@ int main(void) {
 		vc_rgb_to_hsv(image_rgb, image_hsv);
 		vc_hsv_segmentation(image_hsv, image_bin, 0, 50, 40, 100, 40, 100);
 
-		vc_binary_erode(image_bin, image_bin, kernel);
+		//vc_binary_erode(image_bin, image_bin, kernel);
 		//vc_binary_dilate(image_bin, image_bin, kernel);
 		for (int i = 0; i < video.width * video.height; i++) {
 			frame.data[i * 3] = image_bin->data[i];     // Blue
