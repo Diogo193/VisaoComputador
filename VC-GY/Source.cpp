@@ -112,12 +112,19 @@ int main(void) {
 		vc_bgr_to_hsv(image_bgr, image_hsv);
 
 		// 2. Segmentação (HSV em [0..179], [0..255], [0..255])
-		// Ajuste fino conforme o seu vídeo
 		vc_hsv_segmentation(image_hsv, image_bin, 5, 20, 150, 255, 80, 255);
+
+		// Visualizar segmentaçãoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+		cv::Mat mask_seg(video.height, video.width, CV_8UC1, image_bin->data);
+		cv::imshow("VC - SEGMENTACAO", mask_seg);
 
 		// 3. Morfologia
 		vc_binary_close(image_bin, image_bin, 5);
 		vc_binary_open(image_bin, image_bin, 5);
+
+		// Visualizar após morfologiAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+		cv::Mat mask_morf(video.height, video.width, CV_8UC1, image_bin->data);
+		cv::imshow("VC - MORFOLOGIA", mask_morf);
 
 		// 4. CCL + info
 		int nblobs = 0;
