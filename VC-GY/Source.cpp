@@ -12,11 +12,13 @@ extern "C" {
 #include "vc.h"
 }
 
-// Estrutura para ajudar na Contagem Total (Rastreamento Simples)
+// Estrutura para rastreamento simples e contagem por linha
 struct LaranjaRastreada {
 	int id;
 	int xc, yc;
+	int prev_y;
 	int frame_ultima_vez;
+	bool contada;
 };
 
 void vc_timer(void) {
@@ -39,20 +41,20 @@ void vc_timer(void) {
 	}
 }
 
-// Função auxiliar para desenhar o centro de gravidade diretamente na matriz de píxeis (Poupando limite OpenCV)
+// Desenha o centro de gravidade manualmente na matriz de píxeis
 void desenha_cruz_manual(cv::Mat& frame, int xc, int yc, int tamanho) {
 	for (int i = -tamanho; i <= tamanho; i++) {
 		if (xc + i >= 0 && xc + i < frame.cols && yc >= 0 && yc < frame.rows) {
 			int pos = (yc * frame.step) + ((xc + i) * 3);
-			frame.data[pos] = 0;       // B
-			frame.data[pos + 1] = 0;   // G
-			frame.data[pos + 2] = 255; // R (Vermelho)
+			frame.data[pos] = 0;
+			frame.data[pos + 1] = 0;
+			frame.data[pos + 2] = 255;
 		}
 		if (yc + i >= 0 && yc + i < frame.rows && xc >= 0 && xc < frame.cols) {
 			int pos = ((yc + i) * frame.step) + (xc * 3);
-			frame.data[pos] = 0;       // B
-			frame.data[pos + 1] = 0;   // G
-			frame.data[pos + 2] = 255; // R (Vermelho)
+			frame.data[pos] = 0;
+			frame.data[pos + 1] = 0;
+			frame.data[pos + 2] = 255;
 		}
 	}
 }
@@ -67,7 +69,6 @@ int main(void) {
 		int nframe;
 	} video;
 
-	std::string str;
 	int key = 0;
 
 	capture.open(videofile);
@@ -86,13 +87,16 @@ int main(void) {
 
 	vc_timer();
 
-	IVC* image_rgb = vc_image_new(video.width, video.height, 3, 255);
+	IVC* image_bgr = vc_image_new(video.width, video.height, 3, 255);
 	IVC* image_hsv = vc_image_new(video.width, video.height, 3, 255);
-	IVC* image_bin = vc_image_new(video.width, video.height, 1, 255);
+	IVC* image_bin = vc_image_new(video.width, video.height, 1, 1);
+	IVC* image_labels = vc_image_new(video.width, video.height, 1, 255);
 
 	int contador_total = 0;
 	std::vector<LaranjaRastreada> laranjas_registadas;
 	int proximo_id = 1;
+
+	const int line_y = (int)(video.height * 0.65f);
 
 	cv::Mat frame;
 
@@ -102,37 +106,38 @@ int main(void) {
 
 		video.nframe = (int)capture.get(cv::CAP_PROP_POS_FRAMES);
 
-		// Copia frame para IVC
-		memcpy(image_rgb->data, frame.data, video.width * video.height * 3);
+		memcpy(image_bgr->data, frame.data, video.width * video.height * 3);
 
-		// 1. Converter RGB para HSV
-		vc_rgb_to_hsv(image_rgb, image_hsv);
+		// 1. BGR -> HSV
+		vc_bgr_to_hsv(image_bgr, image_hsv);
 
-		// 2. Segmentação da Laranja (Ajusta o H, S e V conforme a iluminação do teu vídeo)
-		// Laranjas costumam estar no Hue [10, 40], Saturation > 50, Value > 50
-		vc_hsv_segmentation(image_hsv, image_bin, 10, 40, 50, 100, 50, 100);
+		// 2. Segmentação (HSV em [0..179], [0..255], [0..255])
+		// Ajuste fino conforme o seu vídeo
+		vc_hsv_segmentation(image_hsv, image_bin, 5, 20, 150, 255, 80, 255);
 
-		// 3. Limpeza Morfológica (Fecha buracos e remove ruído pequeno)
+		// 3. Morfologia
 		vc_binary_close(image_bin, image_bin, 5);
 		vc_binary_open(image_bin, image_bin, 5);
 
-		// 4. Etiquetagem e Extração de Características
+		// 4. CCL + info
 		int nblobs = 0;
-		OVC* blobs = vc_binary_blob_labelling(image_bin, image_bin, &nblobs);
+		OVC* blobs = vc_binary_blob_labelling(image_bin, image_labels, &nblobs);
+
+		if (blobs != NULL) {
+			vc_binary_blob_info(image_labels, blobs, nblobs);
+		}
 
 		int laranjas_na_frame = 0;
 
 		if (blobs != NULL) {
 			for (int i = 0; i < nblobs; i++) {
-				// Filtra ruidos pequenos (Ajustar este valor de área mínima se necessário)
 				if (blobs[i].area > 1500) {
 					laranjas_na_frame++;
 
-					// ----- LÓGICA DE CONTAGEM TOTAL (RASTREADOR) -----
+					// RASTREAMENTO SIMPLES
 					int min_dist = 999999;
 					int best_index = -1;
 
-					// Procura se esta laranja já foi vista nas frames anteriores
 					for (size_t j = 0; j < laranjas_registadas.size(); j++) {
 						int dx = laranjas_registadas[j].xc - blobs[i].xc;
 						int dy = laranjas_registadas[j].yc - blobs[i].yc;
@@ -140,66 +145,74 @@ int main(void) {
 
 						if (dist < min_dist) {
 							min_dist = dist;
-							best_index = j;
+							best_index = (int)j;
 						}
 					}
 
-					// Se a distância for pequena (ex: < 4000 píxeis quadrados), é a mesma laranja que se moveu
 					if (min_dist < 4000 && best_index != -1) {
+						laranjas_registadas[best_index].prev_y = laranjas_registadas[best_index].yc;
 						laranjas_registadas[best_index].xc = blobs[i].xc;
 						laranjas_registadas[best_index].yc = blobs[i].yc;
 						laranjas_registadas[best_index].frame_ultima_vez = video.nframe;
+
+						if (!laranjas_registadas[best_index].contada &&
+							vc_crosses_line(laranjas_registadas[best_index].prev_y, laranjas_registadas[best_index].yc, line_y)) {
+							contador_total++;
+							laranjas_registadas[best_index].contada = true;
+						}
 					}
 					else {
-						// É uma LARANJA NOVA que entrou no ecrã!
-						contador_total++;
-						laranjas_registadas.push_back({ proximo_id++, blobs[i].xc, blobs[i].yc, video.nframe });
+						laranjas_registadas.push_back({ proximo_id++, blobs[i].xc, blobs[i].yc, blobs[i].yc, video.nframe, false });
 					}
 
+					// VISUALIZAÇÃO
+					cv::rectangle(frame, cv::Point(blobs[i].xmin, blobs[i].ymin),
+						cv::Point(blobs[i].xmax, blobs[i].ymax), cv::Scalar(255, 0, 0), 2);
 
-					// ----- INTERFACE VISUAL NO ECRÃ -----
-
-					// Desenha a Bounding Box (Uso 1/3 das funções OpenCV permitidas)
-					cv::rectangle(frame, cv::Point(blobs[i].xmin, blobs[i].ymin), cv::Point(blobs[i].xmax, blobs[i].ymax), cv::Scalar(255, 0, 0), 2);
-
-					// Desenha o Centro de Gravidade Manualmente (Sem gastar OpenCV)
 					desenha_cruz_manual(frame, blobs[i].xc, blobs[i].yc, 5);
 
-					// Formatar e desenhar o texto (Uso 2/3 das funções OpenCV permitidas)
 					char texto[200];
 
-					// Linha 1
 					sprintf(texto, "LABEL:%d AREA:%d PERIMETRO:%.0f", blobs[i].label, blobs[i].area, blobs[i].perimeter);
-					cv::putText(frame, texto, cv::Point(blobs[i].xmin, blobs[i].ymin - 25), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
+					cv::putText(frame, texto, cv::Point(blobs[i].xmin, blobs[i].ymin - 25),
+						cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
 
-					// Linha 2
-					sprintf(texto, "CALIBRE:%d DIAMETRO:%.0fmm", blobs[i].caliber, blobs[i].diameter);
-					cv::putText(frame, texto, cv::Point(blobs[i].xmin, blobs[i].ymin - 12), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
+					sprintf(texto, "CALIBRE:%d DIAMETRO:%.0fmm", blobs[i].caliber, blobs[i].diameter_mm);
+					cv::putText(frame, texto, cv::Point(blobs[i].xmin, blobs[i].ymin - 12),
+						cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
 
-					// Linha 3
 					sprintf(texto, "CATEGORIA:%s", blobs[i].category);
-					cv::putText(frame, texto, cv::Point(blobs[i].xmin, blobs[i].ymin + blobs[i].ymax - blobs[i].ymin + 15), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 255, 255), 1);
+					cv::putText(frame, texto, cv::Point(blobs[i].xmin, blobs[i].ymax + 15),
+						cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 255, 255), 1);
 				}
 			}
 			free(blobs);
 		}
 
-		// Desenhar a Informação Global no canto superior esquerdo
+		// Limpeza de rastros antigos
+		laranjas_registadas.erase(
+			std::remove_if(laranjas_registadas.begin(), laranjas_registadas.end(),
+				[&](const LaranjaRastreada& l) { return (video.nframe - l.frame_ultima_vez) > 15; }),
+			laranjas_registadas.end()
+		);
+
+		// Linha virtual (3/3 OpenCV permitido)
+		cv::line(frame, cv::Point(0, line_y), cv::Point(video.width, line_y), cv::Scalar(0, 0, 255), 2);
+
+		// Info global
 		char info_global[100];
 		sprintf(info_global, "LARANJAS NA FRAME: %d | CONTAGEM TOTAL: %d", laranjas_na_frame, contador_total);
-		cv::putText(frame, info_global, cv::Point(15, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 0), 3); // Sombra preta
-		cv::putText(frame, info_global, cv::Point(15, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 1); // Texto verde
+		cv::putText(frame, info_global, cv::Point(15, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 0), 3);
+		cv::putText(frame, info_global, cv::Point(15, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 1);
 
-		/* Exibe a frame final */
 		cv::imshow("VC - VISUALIZACAO", frame);
-
-		/* Sai da aplicação se premir 'q' */
 		key = cv::waitKey(1);
 	}
 
-	vc_image_free(image_rgb);
+	vc_image_free(image_bgr);
 	vc_image_free(image_hsv);
 	vc_image_free(image_bin);
+	vc_image_free(image_labels);
 
 	vc_timer();
 	cv::destroyWindow("VC - VISUALIZACAO");
