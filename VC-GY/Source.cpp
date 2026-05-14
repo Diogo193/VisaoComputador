@@ -138,7 +138,15 @@ int main(void) {
 
 		if (blobs != NULL) {
 			for (int i = 0; i < nblobs; i++) {
-				if (blobs[i].area > 1500) {
+				int width_px = (blobs[i].xmax - blobs[i].xmin) + 1;
+				int height_px = (blobs[i].ymax - blobs[i].ymin) + 1;
+				int bbox_area = width_px * height_px;
+				float fill = (bbox_area > 0) ? ((float)blobs[i].area / (float)bbox_area) : 0.0f;
+
+				if (blobs[i].area > 1500 &&
+					blobs[i].caliber > 0 &&
+					blobs[i].deformation < 0.30f &&
+					fill > 0.60f) {
 					laranjas_na_frame++;
 
 					// RASTREAMENTO SIMPLES
@@ -156,11 +164,14 @@ int main(void) {
 						}
 					}
 
+					int id_atual = -1;
+
 					if (min_dist < 4000 && best_index != -1) {
 						laranjas_registadas[best_index].prev_y = laranjas_registadas[best_index].yc;
 						laranjas_registadas[best_index].xc = blobs[i].xc;
 						laranjas_registadas[best_index].yc = blobs[i].yc;
 						laranjas_registadas[best_index].frame_ultima_vez = video.nframe;
+						id_atual = laranjas_registadas[best_index].id;
 
 						if (!laranjas_registadas[best_index].contada &&
 							vc_crosses_line(laranjas_registadas[best_index].prev_y, laranjas_registadas[best_index].yc, line_y)) {
@@ -169,7 +180,9 @@ int main(void) {
 						}
 					}
 					else {
-						laranjas_registadas.push_back({ proximo_id++, blobs[i].xc, blobs[i].yc, blobs[i].yc, video.nframe, false });
+						int novo_id = proximo_id++;
+						laranjas_registadas.push_back({ novo_id, blobs[i].xc, blobs[i].yc, blobs[i].yc, video.nframe, false });
+						id_atual = novo_id;
 					}
 
 					// VISUALIZAÇÃO
@@ -180,7 +193,7 @@ int main(void) {
 
 					char texto[200];
 
-					sprintf(texto, "LABEL:%d AREA:%d PERIMETRO:%.0f", blobs[i].label, blobs[i].area, blobs[i].perimeter);
+					sprintf(texto, "ID:%d LABEL:%d AREA:%d PERIMETRO:%.0f", id_atual, blobs[i].label, blobs[i].area, blobs[i].perimeter);
 					cv::putText(frame, texto, cv::Point(blobs[i].xmin, blobs[i].ymin - 25),
 						cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
 
