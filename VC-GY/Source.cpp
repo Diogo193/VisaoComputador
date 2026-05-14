@@ -1,5 +1,4 @@
 #define _CRT_SECURE_NO_WARNINGS
-
 #include <iostream>
 #include <string>
 #include <vector>
@@ -17,9 +16,7 @@ extern "C" {
 struct LaranjaRastreada {
 	int id;
 	int xc, yc;
-	int yc_anterior;
 	int frame_ultima_vez;
-	bool counted;
 };
 
 void vc_timer(void) {
@@ -97,8 +94,6 @@ int main(void) {
 	std::vector<LaranjaRastreada> laranjas_registadas;
 	int proximo_id = 1;
 
-	int linha_contagem_y = video.height / 2;
-
 	cv::Mat frame;
 
 	while (key != 'q') {
@@ -133,10 +128,11 @@ int main(void) {
 				if (blobs[i].area > 1500) {
 					laranjas_na_frame++;
 
-					// ----- LÓGICA DE CONTAGEM TOTAL (CRUZAMENTO DE LINHA) -----
+					// ----- LÓGICA DE CONTAGEM TOTAL (RASTREADOR) -----
 					int min_dist = 999999;
 					int best_index = -1;
 
+					// Procura se esta laranja já foi vista nas frames anteriores
 					for (size_t j = 0; j < laranjas_registadas.size(); j++) {
 						int dx = laranjas_registadas[j].xc - blobs[i].xc;
 						int dy = laranjas_registadas[j].yc - blobs[i].yc;
@@ -144,26 +140,20 @@ int main(void) {
 
 						if (dist < min_dist) {
 							min_dist = dist;
-							best_index = (int)j;
+							best_index = j;
 						}
 					}
 
+					// Se a distância for pequena (ex: < 4000 píxeis quadrados), é a mesma laranja que se moveu
 					if (min_dist < 4000 && best_index != -1) {
-						auto& l = laranjas_registadas[best_index];
-
-						// cruzou a linha?
-						if (!l.counted && l.yc_anterior < linha_contagem_y && blobs[i].yc >= linha_contagem_y) {
-							contador_total++;
-							l.counted = true;
-						}
-
-						l.xc = blobs[i].xc;
-						l.yc_anterior = l.yc;
-						l.yc = blobs[i].yc;
-						l.frame_ultima_vez = video.nframe;
+						laranjas_registadas[best_index].xc = blobs[i].xc;
+						laranjas_registadas[best_index].yc = blobs[i].yc;
+						laranjas_registadas[best_index].frame_ultima_vez = video.nframe;
 					}
 					else {
-						laranjas_registadas.push_back({ proximo_id++, blobs[i].xc, blobs[i].yc, blobs[i].yc, video.nframe, false });
+						// É uma LARANJA NOVA que entrou no ecrã!
+						contador_total++;
+						laranjas_registadas.push_back({ proximo_id++, blobs[i].xc, blobs[i].yc, video.nframe });
 					}
 
 
@@ -199,9 +189,6 @@ int main(void) {
 		sprintf(info_global, "LARANJAS NA FRAME: %d | CONTAGEM TOTAL: %d", laranjas_na_frame, contador_total);
 		cv::putText(frame, info_global, cv::Point(15, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 0), 3); // Sombra preta
 		cv::putText(frame, info_global, cv::Point(15, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 1); // Texto verde
-
-		// Desenhar a linha de contagem (Uso 3/3 das funções OpenCV permitidas)
-		cv::line(frame, cv::Point(0, linha_contagem_y), cv::Point(video.width - 1, linha_contagem_y), cv::Scalar(0, 0, 255), 2);
 
 		/* Exibe a frame final */
 		cv::imshow("VC - VISUALIZACAO", frame);
