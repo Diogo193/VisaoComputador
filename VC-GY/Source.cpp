@@ -77,7 +77,11 @@ int main(void) {
 
 	/* Inicia o timer */
 	vc_timer();
-
+	IVC* image_rgb = vc_image_new(video.width, video.height, 3, 255);
+	IVC* image_hsv = vc_image_new(video.width, video.height, 3, 255);
+	IVC* image_bin = vc_image_new(video.width, video.height, 1, 255);
+	int contador_total = 0;
+	int kernel = 3;
 	cv::Mat frame;
 	while (key != 'q') {
 		/* Leitura de uma frame do vídeo */
@@ -102,7 +106,41 @@ int main(void) {
 		// Liberta a memória da imagem IVC que havia sido criada
 		vc_image_free(image);
 		*/
-		// +++++++++++++++++++++++++
+		// ++++++++++++++++++++++++
+	
+		int nblobs = 0;
+
+		memcpy(image_rgb->data, frame.data, video.width* video.height * 3);
+
+		vc_rgb_to_hsv(image_rgb, image_hsv);
+		vc_hsv_segmentation(image_hsv, image_bin, 0, 50, 40, 100, 40, 100);
+
+		vc_binary_erode(image_bin, image_bin, kernel);
+		//vc_binary_dilate(image_bin, image_bin, kernel);
+		for (int i = 0; i < video.width * video.height; i++) {
+			frame.data[i * 3] = image_bin->data[i];     // Blue
+			frame.data[i * 3 + 1] = image_bin->data[i]; // Green
+			frame.data[i * 3 + 2] = image_bin->data[i]; // Red
+		}
+		cv::imshow("Mascara Binaria", frame);
+
+		OVC* blobs = vc_binary_blob_labelling(image_bin, image_bin, &nblobs);
+		printf("blobs: %d\n", nblobs);
+		if (blobs != NULL)
+		{
+			for (int i = 0; i < nblobs; i++)
+			{
+				if (blobs[i].area > 500)
+				{
+					float diametro_px = (float)(blobs[i].xmax - blobs[i].xmin);
+					float diametro_mm = (diametro_px * 55.0f) / 280.0f;
+					cv::rectangle(frame, cv::Point(blobs[i].xmin, blobs[i].ymin), cv::Point(blobs[i].xmax, blobs[i].ymax), cv::Scalar(0, 255, 0), 2);
+					cv::circle(frame, cv::Point(blobs[i].xc, blobs[i].yc), 5, cv::Scalar(255, 0, 0), -1);
+				}
+			}
+			free(blobs);
+		}
+
 
 		/* Exemplo de inserção texto na frame */
 		str = std::string("RESOLUCAO: ").append(std::to_string(video.width)).append("x").append(std::to_string(video.height));
@@ -125,6 +163,9 @@ int main(void) {
 		key = cv::waitKey(1);
 	}
 
+	vc_image_free(image_rgb);
+	vc_image_free(image_hsv);
+	vc_image_free(image_bin);
 	/* Para o timer e exibe o tempo decorrido */
 	vc_timer();
 

@@ -48,17 +48,9 @@ IVC* vc_image_free(IVC* image);
 // FUNÇÕES: LEITURA E ESCRITA DE IMAGENS (PBM, PGM E PPM)
 IVC* vc_read_image(char* filename);
 int vc_write_image(char* filename, IVC* image);
-int vc_gray_negative(IVC* srcdst);
-int vc_rgb_negative(IVC* srcdst);
-int vc_rgb_to_gray(IVC* src, IVC* dst);
 int vc_hsv_segmentation(IVC* src, IVC* dst, int hmin, int hmax, int smin, int smax, int vmin, int vmax);
 int vc_rgb_to_hsv(IVC* src, IVC* dst);
-int vc_scale_gray_to_color_palette(IVC* src, IVC* dst);
-int vc_gray_to_binary(IVC* src, IVC* dst, int threshold);
 int vc_binary_erode(IVC* src, IVC* dst, int kernel);
-int vc_gray_to_binary_midpoint(IVC* src, IVC* dst, int kernel);
 int vc_binary_dilate(IVC* src, IVC* dst, int kernel);
 OVC* vc_binary_blob_labelling(IVC* src, IVC* dst, int* nblobs);
-int vc_gray_lowpass_mean_filter(IVC* src, IVC* dst, int kernel);
-int compare_unsigned_char(const void* a, const void* b);
-int vc_gray_lowpass_median_filter(IVC* src, IVC* dst, int kernel);
+

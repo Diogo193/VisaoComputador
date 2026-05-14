@@ -365,90 +365,6 @@ int vc_write_image(char* filename, IVC* image)
 	return 0;
 }
 
-
-int vc_gray_negative(IVC* srcdst)
-{
-	unsigned char* data = (unsigned char*)srcdst->data;
-	int width = srcdst->width;
-	int height = srcdst->height;
-	int bytesperline = srcdst->width * srcdst->channels;
-	int channels = srcdst->channels;
-	int x, y;
-	long int pos;
-
-	if ((srcdst->width <= 0) || (srcdst->height <= 0) || (srcdst->data == NULL)) return 0;
-	if (channels != 1) return 0; // Apenas para imagens a cinzentos
-
-	for (y = 0; y < height; y++)
-	{
-		for (x = 0; x < width; x++)
-		{
-			pos = y * bytesperline + x * channels;
-			data[pos] = 255 - data[pos];
-		}
-	}
-
-	return 1;
-}
-
-int vc_rgb_to_gray(IVC* src, IVC* dst)
-{
-	unsigned char* datasrc = (unsigned char*)src->data;
-	int bytesperline_src = src->width * src->channels;
-	int channels_src = src->channels;
-	unsigned char* datadst = (unsigned char*)dst->data;
-	int bytesperline_dst = dst->width * dst->channels;
-	int channels_dst = dst->channels;
-	int width = src->width;
-	int height = src->height;
-	int x, y;
-	long int pos_src, pos_dst;
-	float rf, gf, bf;
-
-	if ((src->width <= 0) || (src->height <= 0) || (src->data == NULL)) return 0;
-	if ((src->width != dst->width) || (src->height != dst->height)) return 0;
-	if ((src->channels != 3) || (dst->channels != 1)) return 0;
-
-	for (y = 0; y < height; y++) {
-		for (x = 0; x < width; x++) {
-			pos_src = y * bytesperline_src + x * channels_src;
-			pos_dst = y * bytesperline_dst + x * channels_dst;
-
-			rf = (float)datasrc[pos_src];
-			gf = (float)datasrc[pos_src + 1];
-			bf = (float)datasrc[pos_src + 2];
-
-			datadst[pos_dst] = (unsigned char)((rf * 0.299) + (gf * 0.587) + (bf * 0.114));
-		}
-	}
-
-	return 1;
-}
-
-int vc_rgb_negative(IVC* srcdst)
-{
-	unsigned char* data = (unsigned char*)srcdst->data;
-	int width = srcdst->width;
-	int height = srcdst->height;
-	int bytesperline = srcdst->width * srcdst->channels;
-	int channels = srcdst->channels;
-	int x, y;
-	long int pos;
-	if ((srcdst->width <= 0) || (srcdst->height <= 0) || (srcdst->data == NULL)) return 0;
-	if (channels != 3) return 0; // Apenas para imagens RGB
-	for (y = 0; y < height; y++)
-	{
-		for (x = 0; x < width; x++)
-		{
-			pos = y * bytesperline + x * channels;
-			data[pos] = 255 - data[pos];       // R
-			data[pos + 1] = 255 - data[pos + 1]; // G
-			data[pos + 2] = 255 - data[pos + 2]; // B
-		}
-	}
-	return 1;
-}
-
 int vc_hsv_segmentation(IVC* src, IVC* dst, int hmin, int hmax, int smin, int smax, int vmin, int vmax)
 {
 	unsigned char* datasrc = (unsigned char*)src->data;
@@ -489,24 +405,18 @@ int vc_hsv_segmentation(IVC* src, IVC* dst, int hmin, int hmax, int smin, int sm
 	vmax_255 = (vmax * 255) / 100;
 
 	// Primeiro converte RGB para HSV
-	IVC* hsv_image = vc_image_new(width, height, 3, 255);
-	if (hsv_image == NULL) return 0;
 
-	if (!vc_rgb_to_hsv(src, hsv_image)) {
-		vc_image_free(hsv_image);
-		return 0;
-	}
 
 	for (y = 0; y < height; y++)
 	{
 		for (x = 0; x < width; x++)
 		{
-			pos_src = y * hsv_image->bytesperline + x * hsv_image->channels;
+			pos_src = y * bytesperline_src + x * channels_src;
 			pos_dst = y * bytesperline_dst + x * channels_dst;
 
-			h = hsv_image->data[pos_src];
-			s = hsv_image->data[pos_src + 1];
-			v = hsv_image->data[pos_src + 2];
+			h = datasrc[pos_src];
+			s = datasrc[pos_src + 1];
+			v = datasrc[pos_src + 2];
 
 			// H é circular: se hmin > hmax, o intervalo cruza 0º
 			if (hmin_255 <= hmax_255)
@@ -521,7 +431,6 @@ int vc_hsv_segmentation(IVC* src, IVC* dst, int hmin, int hmax, int smin, int sm
 		}
 	}
 
-	vc_image_free(hsv_image);
 	return 1;
 }
 
@@ -552,9 +461,9 @@ int vc_rgb_to_hsv(IVC* src, IVC* dst)
 			pos_dst = y * bytesperline_dst + x * channels_dst;
 
 			// Lê valores RGB
-			r = datasrc[pos_src];
+			b = datasrc[pos_src];
 			g = datasrc[pos_src + 1];
-			b = datasrc[pos_src + 2];
+			r = datasrc[pos_src + 2];
 
 			// Normaliza para [0, 1]
 			rf = r / 255.0f;
@@ -587,165 +496,6 @@ int vc_rgb_to_hsv(IVC* src, IVC* dst)
 			datadst[pos_dst] = (unsigned char)(h * 255);     // H: [0, 360] -> [0, 255]
 			datadst[pos_dst + 1] = (unsigned char)(s * 255); // S: [0, 1] -> [0, 255]
 			datadst[pos_dst + 2] = (unsigned char)(v * 255); // V: [0, 1] -> [0, 255]
-		}
-	}
-
-	return 1;
-}
-
-int vc_scale_gray_to_color_palette(IVC* src, IVC* dst) {
-	unsigned char* datasrc = NULL, * datadst = NULL;
-	int width, height;
-	int x, y;
-	long int pos_src, pos_dst;
-	int gray;
-	int r, g, b;
-
-	// Verificações
-	if (src == NULL || dst == NULL)
-		return 0;
-	if (src->width != dst->width || src->height != dst->height)
-		return 0;
-	if (src->channels != 1 || dst->channels != 3)
-		return 0;
-
-	width = src->width;
-	height = src->height;
-	datasrc = (unsigned char*)src->data;
-	datadst = (unsigned char*)dst->data;
-
-	for (y = 0; y < height; y++) {
-		for (x = 0; x < width; x++) {
-			pos_src = y * width + x;
-			pos_dst = (y * width + x) * 3;
-
-			gray = datasrc[pos_src];
-
-			// Palete: Azul -> Ciano -> Verde -> Amarelo -> Vermelho
-			if (gray < 64) {
-				// Azul -> Ciano
-				b = 255;
-				g = gray * 4;
-				r = 0;
-			}
-			else if (gray < 128) {
-				// Ciano -> Verde
-				b = 255 - ((gray - 64) * 4);
-				g = 255;
-				r = 0;
-			}
-			else if (gray < 192) {
-				// Verde -> Amarelo
-				b = 0;
-				g = 255;
-				r = (gray - 128) * 4;
-			}
-			else {
-				// Amarelo -> Vermelho
-				b = 0;
-				g = 255 - ((gray - 192) * 4);
-				r = 255;
-			}
-
-			// Guardar em RGB
-			datadst[pos_dst] = (unsigned char)r;
-			datadst[pos_dst + 1] = (unsigned char)g;
-			datadst[pos_dst + 2] = (unsigned char)b;
-		}
-	}
-
-	return 1;
-}
-
-int vc_gray_to_binary(IVC* src, IVC* dst, int threshold) {
-	unsigned char* datasrc = (unsigned char*)src->data;
-	int bytesperline_src = src->width * src->channels;
-	int channels_src = src->channels;
-	unsigned char* datadst = (unsigned char*)dst->data;
-	int bytesperline_dst = dst->width * dst->channels;
-	int channels_dst = dst->channels;
-	int width = src->width;
-	int height = src->height;
-	int x, y;
-	long int pos_src, pos_dst;
-	// Verificação de erros
-	if ((src->width <= 0) || (src->height <= 0) || (src->data == NULL))
-		return 0;
-	if ((src->width != dst->width) || (src->height != dst->height))
-		return 0;
-	if ((src->channels != 1) || (dst->channels != 1))
-		return 0;
-	for (y = 0; y < height; y++) {
-		for (x = 0; x < width; x++) {
-			pos_src = y * bytesperline_src + x * channels_src;
-			pos_dst = y * bytesperline_dst + x * channels_dst;
-			datadst[pos_dst] = (datasrc[pos_src] >= threshold) ? 255 : 0;
-		}
-	}
-	return 1;
-}
-
-
-
-//usar calculo de threshold automático = 1/2 * (valor mínimo + valor máximo) da imagem a cinzentos com kernel para calcular na vizinhança
-int vc_gray_to_binary_midpoint(IVC* src, IVC* dst, int kernel) {
-	unsigned char* datasrc = (unsigned char*)src->data;
-	unsigned char* datadst = (unsigned char*)dst->data;
-	int bytesperline_src = src->width * src->channels;
-	int bytesperline_dst = dst->width * dst->channels;
-	int channels_src = src->channels;
-	int channels_dst = dst->channels;
-	int width = src->width;
-	int height = src->height;
-	int x, y, kx, ky;
-	long int pos_src, pos_dst;
-	long int pos_k;
-	unsigned char vmin, vmax;
-	unsigned char threshold;
-	int offset = kernel / 2;
-
-	// Verificação de erros
-	if ((src->width <= 0) || (src->height <= 0) || (src->data == NULL)) return 0;
-	if ((src->width != dst->width) || (src->height != dst->height)) return 0;
-	if ((src->channels != 1) || (dst->channels != 1)) return 0;
-
-	// O kernel deve ser um número ímpar e pelo menos 3 (ex: 3, 5, 7, 9...)
-	if (kernel < 3 || kernel % 2 == 0) return 0;
-
-	for (y = 0; y < height; y++)
-	{
-		for (x = 0; x < width; x++)
-		{
-			pos_src = y * bytesperline_src + x * channels_src;
-			pos_dst = y * bytesperline_dst + x * channels_dst;
-
-			vmin = 255;
-			vmax = 0;
-
-			// Percorrer a vizinhança (kernel)
-			for (ky = -offset; ky <= offset; ky++)
-			{
-				for (kx = -offset; kx <= offset; kx++)
-				{
-					// Verificar limites da imagem (bordas)
-					if ((y + ky) >= 0 && (y + ky) < height && (x + kx) >= 0 && (x + kx) < width)
-					{
-						pos_k = (y + ky) * bytesperline_src + (x + kx) * channels_src;
-
-						if (datasrc[pos_k] < vmin) vmin = datasrc[pos_k];
-						if (datasrc[pos_k] > vmax) vmax = datasrc[pos_k];
-					}
-				}
-			}
-
-			// Calcular threshold com base na vizinhança
-			threshold = (unsigned char)((vmin + vmax) / 2);
-
-			// Atribuir novo valor
-			if (datasrc[pos_src] > threshold)
-				datadst[pos_dst] = 255; // Branco
-			else
-				datadst[pos_dst] = 0;   // Preto
 		}
 	}
 
@@ -794,7 +544,7 @@ int vc_binary_dilate(IVC* src, IVC* dst, int kernel) {
 			if (ymax >= src->height)
 				ymax = src->height - 1;
 
-			max = 0;
+			max = 30;
 
 			for (ky = ymin; ky <= ymax; ky++) {
 				for (kx = xmin; kx <= xmax; kx++) {
@@ -1035,116 +785,3 @@ OVC* vc_binary_blob_labelling(IVC* src, IVC* dst, int* nblobs)
 
 	return blobs;
 }
-
-int vc_gray_lowpass_mean_filter(IVC* src, IVC* dst, int kernel) {
-	int x, y, kx, ky;
-	int xmin, xmax, ymin, ymax;
-	long int pos, posk;
-	int sum;
-	unsigned char* datasrc = (unsigned char*)src->data;
-	unsigned char* datadst = (unsigned char*)dst->data;
-	// Verificação de erros
-	if ((src == NULL) || (dst == NULL))
-		return 0;
-	if ((src->width <= 0) || (src->height <= 0) || (src->channels != 1) ||
-		(dst->width <= 0) || (dst->height <= 0) || (dst->channels != 1))
-		return 0;
-	if ((src->width != dst->width) || (src->height != dst->height))
-		return 0;
-	if ((src->data == NULL) || (dst->data == NULL))
-		return 0;
-	// Verificação do kernel
-	if (kernel < 3)
-		kernel = 3;
-	if ((kernel % 2) == 0)
-		kernel++;
-	for (y = 0; y < src->height; y++) {
-		for (x = 0; x < src->width; x++) {
-			xmin = x - kernel / 2;
-			xmax = x + kernel / 2;
-			ymin = y - kernel / 2;
-			ymax = y + kernel / 2;
-			if (xmin < 0)
-				xmin = 0;
-			if (ymin < 0)
-				ymin = 0;
-			if (xmax >= src->width)
-				xmax = src->width - 1;
-			if (ymax >= src->height)
-				ymax = src->height - 1;
-			sum = 0;
-			for (ky = ymin; ky <= ymax; ky++) {
-				for (kx = xmin; kx <= xmax; kx++) {
-					posk = ky * src->bytesperline + kx * src->channels;
-					sum += datasrc[posk];
-				}
-			}
-			pos = y * src->bytesperline + x * src->channels;
-			datadst[pos] = sum / ((xmax - xmin + 1) * (ymax - ymin + 1));
-		}
-	}
-	return 1;
-}
-
-// Função de comparação para qsort (ordenação de unsigned char)
-int compare_unsigned_char(const void* a, const void* b)
-{
-	unsigned char ua = *(const unsigned char*)a;
-	unsigned char ub = *(const unsigned char*)b;
-	return (ua > ub) - (ua < ub);
-}
-
-int vc_gray_lowpass_median_filter(IVC* src, IVC* dst, int kernel) {
-	int x, y, kx, ky;
-	int xmin, xmax, ymin, ymax;
-	long int pos, posk;
-	unsigned char* datasrc = (unsigned char*)src->data;
-	unsigned char* datadst = (unsigned char*)dst->data;
-	// Verificação de erros
-	if ((src == NULL) || (dst == NULL))
-		return 0;
-	if ((src->width <= 0) || (src->height <= 0) || (src->channels != 1) ||
-		(dst->width <= 0) || (dst->height <= 0) || (dst->channels != 1))
-		return 0;
-	if ((src->width != dst->width) || (src->height != dst->height))
-		return 0;
-	if ((src->data == NULL) || (dst->data == NULL))
-		return 0;
-	// Verificação do kernel
-	if (kernel < 3)
-		kernel = 3;
-	if ((kernel % 2) == 0)
-		kernel++;
-	unsigned char* window = (unsigned char*)malloc(kernel * kernel * sizeof(unsigned char));
-	if (window == NULL)
-		return 0;
-	for (y = 0; y < src->height; y++) {
-		for (x = 0; x < src->width; x++) {
-			xmin = x - kernel / 2;
-			xmax = x + kernel / 2;
-			ymin = y - kernel / 2;
-			ymax = y + kernel / 2;
-			if (xmin < 0)
-				xmin = 0;
-			if (ymin < 0)
-				ymin = 0;
-			if (xmax >= src->width)
-				xmax = src->width - 1;
-			if (ymax >= src->height)
-				ymax = src->height - 1;
-			int idx = 0;
-			for (ky = ymin; ky <= ymax; ky++) {
-				for (kx = xmin; kx <= xmax; kx++) {
-					posk = ky * src->bytesperline + kx * src->channels;
-					window[idx++] = datasrc[posk];
-				}
-			}
-			qsort(window, idx, sizeof(unsigned char), compare_unsigned_char);
-			pos = y * src->bytesperline + x * src->channels;
-			datadst[pos] = window[idx / 2];
-		}
-	}
-	free(window);
-	return 1;
-}
-
