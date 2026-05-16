@@ -99,6 +99,8 @@ int main(void) {
 	const int line_y = (int)(video.height * 0.65f);
 
 	cv::Mat frame;
+	cv::Mat mask_seg(video.height, video.width, CV_8UC1, image_bin->data);
+	cv::Mat mask_morf(video.height, video.width, CV_8UC1, image_bin->data);
 
 	while (key != 'q') {
 		capture.read(frame);
@@ -115,7 +117,6 @@ int main(void) {
 		vc_hsv_segmentation(image_hsv, image_bin, 5, 20, 150, 255, 80, 255);
 
 		// Visualizar segmentaçãoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-		cv::Mat mask_seg(video.height, video.width, CV_8UC1, image_bin->data);
 		cv::imshow("VC - SEGMENTACAO", mask_seg);
 
 		// 3. Morfologia
@@ -123,7 +124,6 @@ int main(void) {
 		vc_binary_open(image_bin, image_bin, 5);
 
 		// Visualizar após morfologiAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-		cv::Mat mask_morf(video.height, video.width, CV_8UC1, image_bin->data);
 		cv::imshow("VC - MORFOLOGIA", mask_morf);
 
 		// 4. CCL + info
@@ -151,7 +151,7 @@ int main(void) {
 					blobs[i].caliber > 0 &&
 					blobs[i].deformation < 0.30f &&
 					fill > 0.60f &&
-					circularity > 0.50f) {
+					circularity > 0.60f) {
 					laranjas_na_frame++;
 
 					// RASTREAMENTO SIMPLES
