@@ -151,7 +151,7 @@ int main(void) {
 					blobs[i].caliber > 0 &&
 					blobs[i].deformation < 0.30f &&
 					fill > 0.60f &&
-					circularity > 0.60f) {
+					circularity > 0.50f) {
 					laranjas_na_frame++;
 
 					// RASTREAMENTO SIMPLES
