@@ -119,7 +119,6 @@ int main(void) {
 		vc_binary_close(image_bin, image_bin, 3);
 		vc_binary_open(image_bin, image_bin, 3);
 
-
 		int nblobs = 0;
 		OVC* blobs = vc_binary_blob_labelling(image_bin, image_labels, &nblobs);
 
