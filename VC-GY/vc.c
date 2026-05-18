@@ -10,10 +10,6 @@
 #endif
 
 
-//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-//    FUNÇÕES: ALOCAR E LIBERTAR UMA IMAGEM
-//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
 IVC* vc_image_new(int width, int height, int channels, int levels)
 {
 	IVC* image = (IVC*)malloc(sizeof(IVC));
@@ -53,62 +49,52 @@ IVC* vc_image_free(IVC* image)
 	return image;
 }
 
-//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-//   FUNÇÕES: PROCESSAMENTO
-//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
 int vc_bgr_to_hsv(IVC* src, IVC* dst)
 {
 	unsigned char* datasrc = src->data;
 	unsigned char* datadst = dst->data;
 	int width = src->width;
 	int height = src->height;
-	int x, y;
-	long int pos_src, pos_dst;
 
 	if ((src->width <= 0) || (src->height <= 0) || (src->data == NULL)) return 0;
 	if ((src->width != dst->width) || (src->height != dst->height)) return 0;
 	if ((src->channels != 3) || (dst->channels != 3)) return 0;
 
-	for (y = 0; y < height; y++)
+	int size = width * height * src->channels;
+	
+	for (int i = 0; i < size; i += src->channels)
 	{
-		for (x = 0; x < width; x++)
+		float b = datasrc[i] / 255.0f;
+		float g = datasrc[i + 1] / 255.0f;
+		float r = datasrc[i + 2] / 255.0f;
+
+		float max = (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b);
+		float min = (r < g) ? ((r < b) ? r : b) : ((g < b) ? g : b);
+		float delta = max - min;
+
+		float h = 0.0f;
+		float s = (max == 0.0f) ? 0.0f : (delta / max);
+		float v = max;
+
+		if (delta != 0.0f)
 		{
-			pos_src = y * src->bytesperline + x * src->channels;
-			pos_dst = y * dst->bytesperline + x * dst->channels;
+			if (max == r)
+				h = 60.0f * fmodf(((g - b) / delta), 6.0f);
+			else if (max == g)
+				h = 60.0f * (((b - r) / delta) + 2.0f);
+			else
+				h = 60.0f * (((r - g) / delta) + 4.0f);
 
-			float b = datasrc[pos_src] / 255.0f;
-			float g = datasrc[pos_src + 1] / 255.0f;
-			float r = datasrc[pos_src + 2] / 255.0f;
-
-			float max = (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b);
-			float min = (r < g) ? ((r < b) ? r : b) : ((g < b) ? g : b);
-			float delta = max - min;
-
-			float h = 0.0f;
-			float s = (max == 0.0f) ? 0.0f : (delta / max);
-			float v = max;
-
-			if (delta != 0.0f)
-			{
-				if (max == r)
-					h = 60.0f * fmodf(((g - b) / delta), 6.0f);
-				else if (max == g)
-					h = 60.0f * (((b - r) / delta) + 2.0f);
-				else
-					h = 60.0f * (((r - g) / delta) + 4.0f);
-
-				if (h < 0.0f) h += 360.0f;
-			}
-
-			unsigned char H = (unsigned char)(h / 2.0f);     // 0..179
-			unsigned char S = (unsigned char)(s * 255.0f);   // 0..255
-			unsigned char V = (unsigned char)(v * 255.0f);   // 0..255
-
-			datadst[pos_dst] = H;
-			datadst[pos_dst + 1] = S;
-			datadst[pos_dst + 2] = V;
+			if (h < 0.0f) h += 360.0f;
 		}
+
+		unsigned char H = (unsigned char)(h / 2.0f);     
+		unsigned char S = (unsigned char)(s * 255.0f);   
+		unsigned char V = (unsigned char)(v * 255.0f);  
+
+		datadst[i] = H;
+		datadst[i + 1] = S;
+		datadst[i + 2] = V;
 	}
 
 	return 1;
@@ -278,9 +264,6 @@ int vc_binary_close(IVC* src, IVC* dst, int kernel)
 	return ret;
 }
 
-//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-//   FUNÇÕES: ANÁLISE DE BLOBS E CLASSIFICAÇÃO
-//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 float vc_calculate_perimeter(IVC* src, int label)
 {
@@ -290,10 +273,8 @@ float vc_calculate_perimeter(IVC* src, int label)
 	unsigned char* data = src->data;
 	int count = 0;
 
-	for (y = 0; y < height; y++)
-	{
-		for (x = 0; x < width; x++)
-		{
+	for (y = 0; y < height; y++) {
+    for (x = 0; x < width; x++) {
 			int pos = y * width + x;
 
 			if (data[pos] == label)
@@ -329,7 +310,7 @@ int vc_get_caliber(float diameter_mm)
 	if (diameter_mm >= 51.0f) return 12;
 	if (diameter_mm >= 49.0f) return 13;
 
-	return 0; // fora de norma
+	return 0;
 }
 
 float vc_compute_deformation(OVC* blob)
@@ -383,7 +364,6 @@ OVC* vc_binary_blob_labelling(IVC* src, IVC* dst, int* nblobs)
 	if ((src == NULL) || (dst == NULL) || (nblobs == NULL)) return NULL;
 	if ((src->channels != 1) || (dst->channels != 1)) return NULL;
 
-	// PASSO 1
 	for (y = 0; y < height; y++)
 	{
 		for (x = 0; x < width; x++)
@@ -421,7 +401,6 @@ OVC* vc_binary_blob_labelling(IVC* src, IVC* dst, int* nblobs)
 		}
 	}
 
-	// PASSO 2 (resolver equivalências)
 	for (i = 1; i < label; i++)
 	{
 		int root = i;
@@ -437,7 +416,6 @@ OVC* vc_binary_blob_labelling(IVC* src, IVC* dst, int* nblobs)
 		}
 	}
 
-	// PASSO 3 (re-rotular)
 	int* new_labels = (int*)calloc(label, sizeof(int));
 	int new_label = 1;
 
@@ -498,7 +476,6 @@ int vc_binary_blob_info(IVC* src, OVC* blobs, int nblobs)
 	if ((src == NULL) || (blobs == NULL)) return 0;
 	if (src->channels != 1) return 0;
 
-	// Reset
 	for (int i = 0; i < nblobs; i++)
 	{
 		blobs[i].area = 0;
@@ -515,7 +492,6 @@ int vc_binary_blob_info(IVC* src, OVC* blobs, int nblobs)
 		strcpy(blobs[i].category, "N/A");
 	}
 
-	// Percorrer imagem etiquetada
 	for (y = 0; y < height; y++)
 	{
 		for (x = 0; x < width; x++)
@@ -539,7 +515,6 @@ int vc_binary_blob_info(IVC* src, OVC* blobs, int nblobs)
 		}
 	}
 
-	// Finalizar características
 	for (int i = 0; i < nblobs; i++)
 	{
 		if (blobs[i].area > 0)
@@ -567,4 +542,57 @@ int vc_binary_blob_info(IVC* src, OVC* blobs, int nblobs)
 int vc_crosses_line(int prev_y, int curr_y, int line_y)
 {
 	return (prev_y < line_y && curr_y >= line_y) ? 1 : 0;
+}
+
+int vc_draw_hline(IVC* src, int y, int r, int g, int b)
+{
+	if (src == NULL || y < 0 || y >= src->height) return 0;
+	if (src->channels != 3) return 0;
+
+	for (int x = 0; x < src->width; x++)
+	{
+		int pos = (y * src->width + x) * 3;
+		src->data[pos] = (unsigned char)b; 
+		src->data[pos + 1] = (unsigned char)g;
+		src->data[pos + 2] = (unsigned char)r;
+	}
+	return 1;
+}
+
+int vc_draw_rectangle(IVC* src, int xmin, int ymin, int xmax, int ymax, int r, int g, int b)
+{
+	if (src == NULL || src->channels != 3) return 0;
+
+	if (xmin < 0) xmin = 0;
+	if (ymin < 0) ymin = 0;
+	if (xmax >= src->width) xmax = src->width - 1;
+	if (ymax >= src->height) ymax = src->height - 1;
+
+	for (int i = xmin; i <= xmax; i++)
+	{
+		int pos_top = (ymin * src->width + i) * 3;
+		src->data[pos_top] = (unsigned char)b;
+		src->data[pos_top + 1] = (unsigned char)g;
+		src->data[pos_top + 2] = (unsigned char)r;
+
+		int pos_bottom = (ymax * src->width + i) * 3;
+		src->data[pos_bottom] = (unsigned char)b;
+		src->data[pos_bottom + 1] = (unsigned char)g;
+		src->data[pos_bottom + 2] = (unsigned char)r;
+	}
+
+	for (int j = ymin; j <= ymax; j++)
+	{
+		int pos_left = (j * src->width + xmin) * 3;
+		src->data[pos_left] = (unsigned char)b;
+		src->data[pos_left + 1] = (unsigned char)g;
+		src->data[pos_left + 2] = (unsigned char)r;
+
+		int pos_right = (j * src->width + xmax) * 3;
+		src->data[pos_right] = (unsigned char)b;
+		src->data[pos_right + 1] = (unsigned char)g;
+		src->data[pos_right + 2] = (unsigned char)r;
+	}
+
+	return 1;
 }

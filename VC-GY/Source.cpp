@@ -12,7 +12,6 @@ extern "C" {
 #include "vc.h"
 }
 
-// Estrutura para rastreamento simples e contagem por linha
 struct LaranjaRastreada {
 	int id;
 	int xc, yc;
@@ -41,7 +40,6 @@ void vc_timer(void) {
 	}
 }
 
-// Desenha o centro de gravidade manualmente na matriz de píxeis
 void desenha_cruz_manual(cv::Mat& frame, int xc, int yc, int tamanho) {
 	for (int i = -tamanho; i <= tamanho; i++) {
 		if (xc + i >= 0 && xc + i < frame.cols && yc >= 0 && yc < frame.rows) {
@@ -106,27 +104,22 @@ int main(void) {
 
 		video.nframe = (int)capture.get(cv::CAP_PROP_POS_FRAMES);
 
+		IVC image_view;
+		image_view.width = frame.cols;
+		image_view.height = frame.rows;
+		image_view.channels = 3;
+		image_view.data = frame.data;
+
 		memcpy(image_bgr->data, frame.data, video.width * video.height * 3);
 
-		// 1. BGR -> HSV
 		vc_bgr_to_hsv(image_bgr, image_hsv);
 
-		// 2. Segmentação (HSV em [0..179], [0..255], [0..255])
-		vc_hsv_segmentation(image_hsv, image_bin, 5, 20, 150, 255, 80, 255);
+		vc_hsv_segmentation(image_hsv, image_bin, 0, 20, 120, 255, 60, 255);
 
-		// Visualizar segmentaçãoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-		cv::Mat mask_seg(video.height, video.width, CV_8UC1, image_bin->data);
-		cv::imshow("VC - SEGMENTACAO", mask_seg);
+		vc_binary_close(image_bin, image_bin, 3);
+		vc_binary_open(image_bin, image_bin, 3);
 
-		// 3. Morfologia
-		vc_binary_close(image_bin, image_bin, 5);
-		vc_binary_open(image_bin, image_bin, 5);
 
-		// Visualizar após morfologiAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-		cv::Mat mask_morf(video.height, video.width, CV_8UC1, image_bin->data);
-		cv::imshow("VC - MORFOLOGIA", mask_morf);
-
-		// 4. CCL + info
 		int nblobs = 0;
 		OVC* blobs = vc_binary_blob_labelling(image_bin, image_labels, &nblobs);
 
@@ -150,11 +143,11 @@ int main(void) {
 				if (blobs[i].area > 1500 &&
 					blobs[i].caliber > 0 &&
 					blobs[i].deformation < 0.30f &&
-					fill > 0.60f &&
+					fill > 0.50f &&
 					circularity > 0.60f) {
 					laranjas_na_frame++;
 
-					// RASTREAMENTO SIMPLES
+
 					int min_dist = 999999;
 					int best_index = -1;
 
@@ -190,9 +183,7 @@ int main(void) {
 						id_atual = novo_id;
 					}
 
-					// VISUALIZAÇÃO
-					cv::rectangle(frame, cv::Point(blobs[i].xmin, blobs[i].ymin),
-						cv::Point(blobs[i].xmax, blobs[i].ymax), cv::Scalar(255, 0, 0), 2);
+					vc_draw_rectangle(&image_view, blobs[i].xmin, blobs[i].ymin, blobs[i].xmax, blobs[i].ymax, 0, 255, 0);
 
 					desenha_cruz_manual(frame, blobs[i].xc, blobs[i].yc, 5);
 
@@ -214,17 +205,14 @@ int main(void) {
 			free(blobs);
 		}
 
-		// Limpeza de rastros antigos
 		laranjas_registadas.erase(
 			std::remove_if(laranjas_registadas.begin(), laranjas_registadas.end(),
 				[&](const LaranjaRastreada& l) { return (video.nframe - l.frame_ultima_vez) > 15; }),
 			laranjas_registadas.end()
 		);
 
-		// Linha virtual (3/3 OpenCV permitido)
-		cv::line(frame, cv::Point(0, line_y), cv::Point(video.width, line_y), cv::Scalar(0, 0, 255), 2);
+		vc_draw_hline(&image_view, line_y, 0, 0, 255);
 
-		// Info global
 		char info_global[100];
 		sprintf(info_global, "LARANJAS NA FRAME: %d | CONTAGEM TOTAL: %d", laranjas_na_frame, contador_total);
 		cv::putText(frame, info_global, cv::Point(15, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 0), 3);
